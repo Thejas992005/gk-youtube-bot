@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["ffmpeg", "dejavu_fonts"]
+nixPkgs = ["python312", "ffmpeg", "dejavu_fonts"]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
