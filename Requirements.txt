@@ -6,3 +6,7 @@ google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 schedule==1.2.2
 numpy==1.26.4
+imageio==2.34.0
+imageio-ffmpeg==0.4.9
+decorator==4.4.2
+proglog==0.1.10
