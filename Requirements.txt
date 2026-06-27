@@ -1,0 +1,8 @@
+google-generativeai==0.7.2
+moviepy==1.0.3
+Pillow==10.3.0
+google-api-python-client==2.131.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+schedule==1.2.2
+numpy==1.26.4
