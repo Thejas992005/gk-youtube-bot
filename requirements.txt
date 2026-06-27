@@ -1,5 +1,5 @@
 setuptools>=65.0.0
-google-generativeai==0.7.2
+requests>=2.31.0
 moviepy==1.0.3
 Pillow==10.3.0
 google-api-python-client==2.131.0
