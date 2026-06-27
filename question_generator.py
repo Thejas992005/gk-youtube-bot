@@ -13,6 +13,15 @@ GK_TOPICS = [
     "Economics & Finance", "World History", "Politics"
 ]
 
+# Free models on OpenRouter (tries each one if previous fails)
+FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct",
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-2-9b-it:free",
+    "qwen/qwen-2-7b-instruct:free",
+    "huggingfaceh4/zephyr-7b-beta:free"
+]
+
 def generate_question(retries=5):
     topic = random.choice(GK_TOPICS)
 
@@ -32,60 +41,58 @@ Return ONLY a JSON object in this exact format, no extra text, no markdown backt
 }}
 Make sure the question is interesting, factual, and the answer is accurate."""
 
-    for attempt in range(retries):
-        try:
-            time.sleep(2)
+    for model in FREE_MODELS:
+        print(f"Trying model: {model}")
+        for attempt in range(3):
+            try:
+                time.sleep(2)
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://gk-youtube-bot.railway.app",
+                        "X-Title": "GK YouTube Bot"
+                    },
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.7,
+                        "max_tokens": 500
+                    }
+                )
 
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://gk-youtube-bot.railway.app",
-                    "X-Title": "GK YouTube Bot"
-                },
-                json={
-                    "model": "meta-llama/llama-3.1-8b-instruct:free",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 500
-                }
-            )
+                if response.status_code == 404:
+                    print(f"Model {model} not available, trying next...")
+                    break  # Try next model
 
-            if response.status_code != 200:
-                raise Exception(f"API error {response.status_code}: {response.text}")
+                if response.status_code != 200:
+                    raise Exception(f"API error {response.status_code}: {response.text}")
 
-            data = response.json()
-            text = data["choices"][0]["message"]["content"].strip()
+                data = response.json()
+                text = data["choices"][0]["message"]["content"].strip()
 
-            # Clean up markdown if present
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
+                # Clean up markdown if present
+                if "```json" in text:
+                    text = text.split("```json")[1].split("```")[0].strip()
+                elif "```" in text:
+                    text = text.split("```")[1].split("```")[0].strip()
 
-            # Find JSON object in text
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            if start != -1 and end > start:
-                text = text[start:end]
+                # Find JSON object in text
+                start = text.find("{")
+                end = text.rfind("}") + 1
+                if start != -1 and end > start:
+                    text = text[start:end]
 
-            result = json.loads(text)
-            print(f"✅ Question generated: {result['question'][:60]}...")
-            return result
+                result = json.loads(text)
+                print(f"✅ Question generated using {model}")
+                return result
 
-        except Exception as e:
-            print(f"Attempt {attempt+1} failed: {e}")
-            wait_time = (attempt + 1) * 10
-            print(f"Waiting {wait_time} seconds before retry...")
-            time.sleep(wait_time)
+            except Exception as e:
+                print(f"Attempt {attempt+1} with {model} failed: {e}")
+                time.sleep(10)
 
-    raise Exception("Failed to generate question after all retries")
+    raise Exception("All models failed to generate question")
 
 
 if __name__ == "__main__":
