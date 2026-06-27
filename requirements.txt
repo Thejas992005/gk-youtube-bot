@@ -1,4 +1,4 @@
-setuptools
+setuptools>=65.0.0
 google-generativeai==0.7.2
 moviepy==1.0.3
 Pillow==10.3.0
@@ -8,6 +8,6 @@ google-auth-oauthlib==1.2.0
 schedule==1.2.2
 numpy==1.26.4
 imageio==2.34.0
-imageio-ffmpeg==0.4.9
+imageio-ffmpeg==0.5.1
 decorator==4.4.2
 proglog==0.1.10
