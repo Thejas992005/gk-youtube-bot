@@ -3,93 +3,100 @@ import json
 import time
 import schedule
 import logging
-from datetime import datetime
 from question_generator import generate_question
-from video_creator import create_video
-from youtube_uploader import upload_video
+from shorts_creator import create_short
+from shorts_uploader import upload_short, check_and_reply_comments
+from telegram_notify import notify_upload_success, notify_upload_failed, notify_bot_started
 
-# ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("bot.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()]
 )
 log = logging.getLogger(__name__)
 
-# ── Config ─────────────────────────────────────────────────────────────────
-UPLOAD_INTERVAL_HOURS = 4   # Upload every 4 hours = 6 videos/day
-VIDEOS_DIR = "videos"
-COUNTER_FILE = "video_counter.json"
+SHORTS_PER_DAY          = 6
+UPLOAD_EVERY_HOURS      = 24 // SHORTS_PER_DAY  # 4 hours
+COMMENT_CHECK_EVERY_MIN = 15
+VIDEOS_DIR              = "videos"
+COUNTER_FILE            = "counter.json"
 
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
-def get_video_counter():
+def get_count():
     if os.path.exists(COUNTER_FILE):
-        with open(COUNTER_FILE) as f:
-            return json.load(f).get("count", 1)
+        return json.load(open(COUNTER_FILE)).get("n", 1)
     return 1
 
-def save_video_counter(count):
-    with open(COUNTER_FILE, "w") as f:
-        json.dump({"count": count}, f)
+def save_count(n):
+    json.dump({"n": n}, open(COUNTER_FILE,"w"))
 
-def run_pipeline():
-    """Full pipeline: Generate → Create Video → Upload → Cleanup."""
-    video_num = get_video_counter()
-    log.info(f"🚀 Starting pipeline for video #{video_num}")
+def run_upload():
+    n = get_count()
+    log.info(f"🚀 Pipeline starting for Short #{n}")
 
-    # Step 1: Generate question
+    # 1 — Generate question
     try:
-        log.info("🧠 Generating GK question...")
-        question_data = generate_question()
-        log.info(f"✅ Question: {question_data['question']}")
+        log.info("🧠 Generating question...")
+        qdata = generate_question()
+        log.info(f"✅ [{qdata['category']}] {qdata['question'][:60]}...")
     except Exception as e:
-        log.error(f"❌ Question generation failed: {e}")
+        log.error(f"❌ Question failed: {e}")
+        notify_upload_failed(f"Question generation failed: {e}")
         return
 
-    # Step 2: Create video
-    video_path = os.path.join(VIDEOS_DIR, f"gk_quiz_{video_num}.mp4")
+    # 2 — Create Short
+    path = os.path.join(VIDEOS_DIR, f"short_{n}.mp4")
     try:
-        log.info("🎬 Creating video...")
-        create_video(question_data, video_path)
-        log.info(f"✅ Video created: {video_path}")
+        log.info("🎬 Creating Short (1080×1920)...")
+        create_short(qdata, path)
     except Exception as e:
-        log.error(f"❌ Video creation failed: {e}")
+        log.error(f"❌ Video failed: {e}")
+        notify_upload_failed(f"Video creation failed: {e}")
         return
 
-    # Step 3: Upload to YouTube
+    # 3 — Upload
     try:
         log.info("📤 Uploading to YouTube...")
-        video_id = upload_video(video_path, question_data, video_num)
-        log.info(f"✅ Uploaded: https://youtu.be/{video_id}")
+        vid = upload_short(path, qdata, n)
+        log.info(f"🎉 Live at https://youtu.be/{vid}")
+        notify_upload_success(vid, qdata, n)
     except Exception as e:
         log.error(f"❌ Upload failed: {e}")
+        notify_upload_failed(f"Upload failed: {e}")
         return
 
-    # Step 4: Cleanup
-    try:
-        os.remove(video_path)
-        log.info("🗑️  Temp video deleted")
-    except Exception:
-        pass
+    # 4 — Cleanup
+    try: os.remove(path)
+    except: pass
 
-    save_video_counter(video_num + 1)
-    log.info(f"🎉 Pipeline complete! Next run in {UPLOAD_INTERVAL_HOURS} hours.\n")
+    save_count(n + 1)
+    log.info(f"✅ Short #{n} done! Next in {UPLOAD_EVERY_HOURS}h\n")
+
+def run_comment_check():
+    log.info("💬 Checking comments...")
+    try:
+        check_and_reply_comments()
+    except Exception as e:
+        log.error(f"❌ Comment check failed: {e}")
 
 def main():
-    log.info("=" * 50)
-    log.info("🤖 GK YouTube Bot Started!")
-    log.info(f"📅 Upload schedule: Every {UPLOAD_INTERVAL_HOURS} hours")
-    log.info("=" * 50)
+    log.info("="*55)
+    log.info("🤖 GK SHORTS BOT STARTED!")
+    log.info(f"📅 {SHORTS_PER_DAY} Shorts/day | every {UPLOAD_EVERY_HOURS} hours")
+    log.info(f"💬 Comment check every {COMMENT_CHECK_EVERY_MIN} mins")
+    log.info("="*55)
 
-    # Run immediately on start
-    run_pipeline()
+    notify_bot_started()
 
-    # Schedule recurring uploads
-    schedule.every(UPLOAD_INTERVAL_HOURS).hours.do(run_pipeline)
+    # Run immediately
+    run_upload()
+
+    # Schedule uploads every 4 hours
+    schedule.every(UPLOAD_EVERY_HOURS).hours.do(run_upload)
+
+    # Check comments every 15 minutes
+    schedule.every(COMMENT_CHECK_EVERY_MIN).minutes.do(run_comment_check)
 
     while True:
         schedule.run_pending()
